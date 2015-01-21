@@ -1,27 +1,30 @@
-@import url(http://fonts.googleapis.com/css?family=Open+Sans:400italic,700italic,400,700);
+@import url(https://fonts.googleapis.com/css?family=Open+Sans:400italic,700italic,400,700);
 body, h1, h2, h3, h4, p, span {
 	font-family: 'Open Sans';
 	background-color: #000;
 	color: #eee;
+	line-height: 1.25;
 }
-/*
-.wrapper { display:table-cell; vertical-align:bottom; height:100%;  }
-#postContainer { max-height:500px; overflow:auto;  }
-*/
 
 .wrapper {
 	position: relative;
 	height: 100%;
 }
+#subredditContainer {
+	height: 2em;
+	background-color: #f00;
+	width: 100%;
+	z-index: 10;
+	position: relative;
+}
 #postContainer {
 	position: absolute;
 	bottom: 0;
 	width: 100%;
-	overflow: hidden;
+	z-index: 1;
 }
 .post {
-	/*position: absolute;*/
-	padding: 5px 0;
+	padding: 10px 0;
 }
 
 .post .details {
@@ -30,6 +33,10 @@ body, h1, h2, h3, h4, p, span {
 .post .details a{
 	color: #fff;
 }
+.post .title .fa-certificate{
+	color: #FFD353;
+}
+
 /*.post:hover .details{
 	display: block;
 }*/
