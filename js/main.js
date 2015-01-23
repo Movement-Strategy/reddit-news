@@ -1,7 +1,9 @@
 $(document).ready(function() {
 	startInterval();
-	addSubreddits();
+	addSubredditsToTitle();
 	addPostToDOM();
+	getLocalStorage();
+	window.onbeforeunload = beforeUnload;
 });
 
 var subreddits = [
@@ -20,15 +22,29 @@ var newestPost = {
 };
 
 var redditPosts = [];
+var postsSeen = {};
+var highestUpvotes = {};
 var interval;
 var currentlyFetching = false;
 
-function startInterval(){
-	interval = setInterval(addPostToDOM, 2000);
-
+function beforeUnload(){
+	saveLocalStorage();
+	return null; // any non-void return will create an alert to the user
 }
 
-function addSubreddits(){
+function startInterval(){
+	interval = setInterval(addPostToDOM, 2000);
+}
+
+function getLocalStorage() {
+	var postsSeenLS = JSON.parse(localStorage.getItem('postsSeen'))
+	postsSeen = (postsSeenLS) ? postsSeenLS : {};
+}
+function saveLocalStorage() {
+	localStorage.setItem('postsSeen', JSON.stringify(postsSeen));
+}
+
+function addSubredditsToTitle(){
 	var subsForDisplay = '';
 	for(var i=0; i<subreddits.length; i++){
 		subsForDisplay += '/r/' + subreddits[i];
@@ -45,40 +61,60 @@ function addSubreddits(){
 }
 
 function addPostToDOM(){
-	// console.log("left in array", redditPosts.length)
 	if(redditPosts.length < 5 && !currentlyFetching){
-		console.log("right here", redditPosts.length);
 		currentlyFetching = true;
 		fetchRedditPosts(addPostToDOM);
 	}
 	else if (!currentlyFetching) {
 		var post = redditPosts.pop();
 
+		var seen = false;
+		var scoreDiff = 0;
+		if(post.id in postsSeen){
+			seen = true;
+			scoreDiff = post.score - postsSeen[post.id];
+		}
+
+		postsSeen[post.id] = post.score;
+
 		var newPost = $('<div class="post"></div>');
 
 		// var title = $('<div>').addClass('title').text('/r/'+post.subreddit + ' ' + post.title);
-		var title = $('<div>').addClass('title').text(post.title);
+		var titleText = (seen) ? post.title : '<i class="fa fa-certificate"></i> ' + post.title;
+		titleText += (scoreDiff >= 50) ? ' <i class="fa fa-line-chart"></i> +' + scoreDiff.toLocaleString() : '';
+		var title = $('<div>').addClass('title').html(titleText);
 		newPost.append(title);
 
-		// var ago =
 
+		// TODO: move this to an Underscore template
 		var details = $('<div>').addClass('details');
-		var detailsBody = '<a href="http://reddit.com/r/'+post.subreddit+'">/r/'+post.subreddit+'</a> '
+		var detailsBody = '<a href="https://reddit.com/r/'+post.subreddit+'">/r/'+post.subreddit+'</a> '
 			detailsBody += '<i class="fa fa-arrow-up"></i> '
 			detailsBody += post.score.toLocaleString() + ' ';
-			detailsBody += '<a href="http://reddit.com'+post.permalink+'" target="_blank"><i class="fa fa-reddit"></i></a> ';
+			detailsBody += '<a href="https://reddit.com'+post.permalink+'" target="_blank"><i class="fa fa-reddit"></i></a> ';
 			detailsBody += '<a href="'+post.url+'" target="_blank"><i class="fa fa-external-link"></i></a> ';
-			detailsBody += '<a href="http://reddit.com'+post.permalink+'" target="_blank"><i class="fa fa-comments-o"></i>'+post.num_comments.toLocaleString()+'</a> ';
+			detailsBody += '<a href="https://reddit.com'+post.permalink+'" target="_blank"><i class="fa fa-comments-o"></i>'+post.num_comments.toLocaleString()+'</a> ';
 			detailsBody += 'Posted by /u/'+post.author + ' ';
 			detailsBody += '<span data-livestamp="'+post.created_utc+'"></span>';
 		details.html(detailsBody);
 		newPost.append(details);
 
+		var sizePercent = post.score / highestUpvotes[post.subreddit];
+
+		// in ems
+		var fontSize = (sizePercent * 2) + 1;
+
+		newPost.children('.title').css('font-size', fontSize + 'em');
+
 		newPost.css({
 			display: 'none'
 		});
 
-		newPost.appendTo('#postContainer').show('slow');
+		// newPost.appendTo('#postContainer').show('slow');
+
+		var speed = 500 * (1+(sizePercent*2));
+
+		newPost.appendTo('#postContainer').slideDown(speed);
 
 		newPost.hover(function(){
 			// mouseenter
@@ -90,21 +126,32 @@ function addPostToDOM(){
 			// debounceHideDetails(this);
 		});
 
+		cleanup();
+
 	}
 	else{
 
 	}
 }
 
+function cleanup(){
+	$('.post').each(function(index, el){
+		var $el = $(el)
+		if($el.offset().top < -$el.height()){
+			$el.remove();
+		}
+	});
+}
+
 var debounceShowDetails = _.debounce(function(self){
 		$(self).children('.details').show('slow');
 	}, 500);
 
+
 function fetchRedditPosts(callback) {
-	console.log('fetching posts');
 	currentlyFetching = true;
 	$.ajax({
-		url: 'http://www.reddit.com/r/'+ subreddits.join('+') +'/hot.json?limit=100',
+		url: 'https://www.reddit.com/r/'+ subreddits.join('+') +'/hot.json?limit=100',
 		// url: 'sampleRedditData.json',
 		cache: false
 	}).done(function(data) {
@@ -112,13 +159,17 @@ function fetchRedditPosts(callback) {
 		data.data.children.forEach(function(post) {
 			redditPosts.push(post.data);
 
-			if(post.data.created_utc > newestPost.timestamp) {
-				newestPost.timestamp = post.data.created_utc;
-				newestPost.id = post.data.id;
-			}
-			if(post.data.created_utc < oldestPost.timestamp) {
-				oldestPost.timestamp = post.data.created_utc;
-				oldestPost.id = post.data.id;
+			// if(post.data.created_utc > newestPost.timestamp) {
+			// 	newestPost.timestamp = post.data.created_utc;
+			// 	newestPost.id = post.data.id;
+			// }
+			// if(post.data.created_utc < oldestPost.timestamp) {
+			// 	oldestPost.timestamp = post.data.created_utc;
+			// 	oldestPost.id = post.data.id;
+			// }
+
+			if(!highestUpvotes[post.data.subreddit] || post.data.score > highestUpvotes[post.data.subreddit]){
+				highestUpvotes[post.data.subreddit] = post.data.score;
 			}
 
 		});
@@ -168,7 +219,7 @@ data: {
 	permalink: "/r/worldnews/comments/2jersv/wind_blows_away_fossil_power_in_the_nordics_the/",
 	stickied: false,
 	created: 1413489212,
-	url: "http://reuters.com/article/idUSL6N0S530M20141015?irpc=932",
+	url: "https://reuters.com/article/idUSL6N0S530M20141015?irpc=932",
 	author_flair_text: null,
 	title: "Wind blows away fossil power in the Nordics, the Baltics next. The arrival of wind power on a large scale has pushed electricity prices down, eroding profitability of fossil power stations.",
 	created_utc: 1413460412,
